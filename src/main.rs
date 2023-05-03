@@ -1,4 +1,7 @@
-use macroquad::prelude::*;
+use macroquad::{
+    audio::{load_sound, play_sound_once},
+    prelude::*,
+};
 
 const DEBUG_DRAW: bool = false;
 
@@ -210,12 +213,12 @@ const ASTEROID_CONFIG: [AsteroidPrototype; 3] = [
     },
     AsteroidPrototype {
         size: 30.0,
-        speed: 50f32,
+        speed: 60f32,
         score: 2,
     },
     AsteroidPrototype {
         size: 15.0,
-        speed: 100f32,
+        speed: 180f32,
         score: 3,
     },
 ];
@@ -227,6 +230,16 @@ async fn main() {
     next_frame().await; // wait for screen resize
 
     let screen_bounds = vec2(screen_width(), screen_height());
+
+    let shoot_sound = load_sound("assets/shoot.wav")
+        .await
+        .expect("shoot sound should be at assets/shoot.wav");
+    let explosion_sound = load_sound("assets/explosion.wav")
+        .await
+        .expect("explosion sound should be at assets/explosion.wav");
+    let death_sound = load_sound("assets/death.wav")
+        .await
+        .expect("death sound should be at assets/death.wav");
 
     let mut state = State::new(screen_bounds);
 
@@ -312,6 +325,7 @@ async fn main() {
                 ),
                 life: BULLET_MAX_LIFE,
             });
+            play_sound_once(shoot_sound);
         }
 
         for bullet in bullets.iter_mut() {
@@ -354,6 +368,7 @@ async fn main() {
                 if (bullet.pos - asteroid.pos).length() < asteroid.size() + BULLET_RADIUS {
                     asteroid_destroyed = true;
                     *score += asteroid.score();
+                    play_sound_once(explosion_sound);
                     if let Some(asteroids) = asteroid.split() {
                         new_asteroids.extend(asteroids);
                     }
@@ -367,6 +382,7 @@ async fn main() {
             if (player.pos - asteroid.pos).length() < asteroid.size() + PLAYER_SIZE {
                 asteroid_destroyed = true;
                 *game_over = true;
+                play_sound_once(death_sound);
             }
 
             !asteroid_destroyed
