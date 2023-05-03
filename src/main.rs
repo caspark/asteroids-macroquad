@@ -1,5 +1,5 @@
 use macroquad::{
-    audio::{load_sound, play_sound_once},
+    audio::{load_sound, play_sound_once, PlaySoundParams},
     prelude::*,
 };
 
@@ -240,6 +240,9 @@ async fn main() {
     let death_sound = load_sound("assets/death.wav")
         .await
         .expect("death sound should be at assets/death.wav");
+    let thrust_sound = load_sound("assets/thrust.wav")
+        .await
+        .expect("thrust sound should be at assets/thrust.wav");
 
     let mut state = State::new(screen_bounds);
 
@@ -262,16 +265,18 @@ async fn main() {
             ref mut level,
         } = state;
 
-        let mut draw_thrust = false;
-        let thrust = if is_key_down(KeyCode::W) {
-            draw_thrust = true;
-            vec2(
-                ACCELERATION * player.angle.cos(),
-                ACCELERATION * player.angle.sin(),
-            )
-        } else {
-            Vec2::ZERO
-        };
+        let thrusting = is_key_down(KeyCode::W);
+        if is_key_pressed(KeyCode::W) {
+            macroquad::audio::play_sound(
+                thrust_sound,
+                PlaySoundParams {
+                    volume: 0.5,
+                    looped: true,
+                },
+            );
+        } else if is_key_released(KeyCode::W) {
+            macroquad::audio::stop_sound(thrust_sound);
+        }
 
         let turning = if is_key_down(KeyCode::A) {
             -1.0
@@ -284,7 +289,14 @@ async fn main() {
         let shooting = is_key_down(KeyCode::S) && player.shot_cooldown <= 0.0;
 
         player.angle += turning * TURN_SPEED * get_frame_time();
-        player.velocity += thrust * get_frame_time();
+        player.velocity += if thrusting {
+            vec2(
+                ACCELERATION * player.angle.cos(),
+                ACCELERATION * player.angle.sin(),
+            )
+        } else {
+            Vec2::ZERO
+        } * get_frame_time();
         player.shot_cooldown -= get_frame_time();
         player.shot_cooldown = player.shot_cooldown.max(0.0);
 
@@ -411,7 +423,7 @@ async fn main() {
             draw_circle_lines(asteroid.pos.x, asteroid.pos.y, asteroid.size(), 1.0, WHITE);
         }
 
-        player.draw(draw_thrust);
+        player.draw(thrusting);
 
         draw_text(format!("Score: {score}").as_str(), 0.0, 32.0, 32.0, WHITE);
         draw_text(format!("Level: {level}").as_str(), 0.0, 64.0, 32.0, WHITE);
