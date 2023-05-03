@@ -162,7 +162,7 @@ const FRICTION: f32 = 0.1f32;
 const TURN_SPEED: f32 = 5f32;
 const SHOT_COOLDOWN: f32 = 0.5f32;
 
-const BULLET_MAX_LIFE: f32 = 1f32;
+const BULLET_MAX_LIFE: f32 = 0.5f32;
 const BULLET_SPEED: f32 = 1000f32;
 const BULLET_RADIUS: f32 = 5f32;
 
