@@ -119,6 +119,7 @@ struct State {
     asteroids: Vec<Asteroid>,
     score: u32,
     game_over: bool,
+    level: u32,
 }
 
 impl State {
@@ -147,6 +148,7 @@ impl State {
             asteroids,
             score: 0,
             game_over: false,
+            level: 1,
         }
     }
 }
@@ -193,6 +195,7 @@ async fn main() {
             ref mut asteroids,
             ref mut score,
             ref mut game_over,
+            ref mut level,
         } = state;
 
         let mut draw_thrust = false;
@@ -322,6 +325,7 @@ async fn main() {
                 player.pos,
                 PLAYER_CLEAR_RADIUS,
             );
+            *level += 1;
         }
 
         clear_background(BLACK);
@@ -337,6 +341,14 @@ async fn main() {
         player.draw(draw_thrust);
 
         draw_text(format!("Score: {score}").as_str(), 0.0, 32.0, 32.0, WHITE);
+        draw_text(format!("Level: {level}").as_str(), 0.0, 64.0, 32.0, WHITE);
+        draw_text(
+            format!("Remaining: {count}", count = asteroids.len()).as_str(),
+            0.0,
+            screen_bounds.y,
+            32.0,
+            WHITE,
+        );
 
         next_frame().await;
     }
