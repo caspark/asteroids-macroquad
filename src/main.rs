@@ -171,7 +171,7 @@ const ASTEROID_STARTING_COUNT: u32 = 10;
 const ASTEROID_SIZES: [f32; 3] = [15.0, 30.0, 60.0];
 const ASTEROID_MIN_SIZE: f32 = ASTEROID_SIZES[0];
 
-#[macroquad::main("BasicShapes")]
+#[macroquad::main("Asteroids")]
 async fn main() {
     request_new_screen_size(1024f32, 768f32);
 
