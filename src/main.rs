@@ -247,6 +247,9 @@ async fn main() {
     let mut state = State::new(screen_bounds);
 
     loop {
+        // window might have been resized
+        let screen_bounds = vec2(screen_width(), screen_height());
+
         if is_key_pressed(KeyCode::Escape) {
             println!("Escape pressed, exiting...");
             break;
