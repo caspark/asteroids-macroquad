@@ -7,6 +7,61 @@ struct Player {
     shot_cooldown: f32,
 }
 
+impl Player {
+    fn draw(&self, draw_thrust: bool) {
+        if draw_thrust {
+            draw_circle(
+                self.pos.x - self.angle.cos() * PLAYER_SIZE,
+                self.pos.y - self.angle.sin() * PLAYER_SIZE,
+                8f32,
+                YELLOW,
+            );
+        }
+
+        draw_triangle(
+            vec2(
+                self.pos.x + self.angle.cos() * PLAYER_SIZE,
+                self.pos.y + self.angle.sin() * PLAYER_SIZE,
+            ),
+            vec2(
+                self.pos.x
+                    + (self.angle + std::f32::consts::PI / 4.0 + std::f32::consts::PI).cos()
+                        * PLAYER_SIZE,
+                self.pos.y
+                    + (self.angle + std::f32::consts::PI / 4.0 + std::f32::consts::PI).sin()
+                        * PLAYER_SIZE,
+            ),
+            vec2(
+                self.pos.x
+                    + (self.angle - std::f32::consts::PI / 4.0 + std::f32::consts::PI).cos()
+                        * PLAYER_SIZE,
+                self.pos.y
+                    + (self.angle - std::f32::consts::PI / 4.0 + std::f32::consts::PI).sin()
+                        * PLAYER_SIZE,
+            ),
+            WHITE,
+        );
+
+        draw_line(
+            self.pos.x,
+            self.pos.y,
+            self.pos.x + self.velocity.x,
+            self.pos.y + self.velocity.y,
+            1.0,
+            BLUE,
+        );
+        draw_line(
+            self.pos.x,
+            self.pos.y,
+            self.pos.x + self.angle.cos() * 50f32,
+            self.pos.y + self.angle.sin() * 50f32,
+            1.0,
+            RED,
+        );
+        draw_circle(self.pos.x, self.pos.y, 2f32, RED);
+    }
+}
+
 struct Bullet {
     pos: Vec2,
     velocity: Vec2,
@@ -33,6 +88,29 @@ impl Asteroid {
             size: rand::gen_range(10.0, 50.0),
         }
     }
+
+    fn spawn_many(
+        v: &mut Vec<Asteroid>,
+        count: u32,
+        bounds: Vec2,
+        avoid_pos: Vec2,
+        avoid_dist: f32,
+    ) {
+        while v.len() < count as usize {
+            let asteroid = Asteroid::new(bounds);
+            if asteroid.pos.distance(avoid_pos) < asteroid.size + avoid_dist {
+                continue;
+            }
+            for other in v.iter() {
+                if asteroid.pos.distance(other.pos) < asteroid.size + other.size {
+                    continue;
+                }
+            }
+
+            // no collisions so we're good to go
+            v.push(asteroid);
+        }
+    }
 }
 
 struct State {
@@ -52,9 +130,14 @@ impl State {
             shot_cooldown: 0.0,
         };
 
-        let asteroids = (0..ASTEROID_COUNT)
-            .map(|_| Asteroid::new(screen_bounds))
-            .collect::<Vec<_>>();
+        let mut asteroids = Vec::new();
+        Asteroid::spawn_many(
+            &mut asteroids,
+            ASTEROID_COUNT,
+            screen_bounds,
+            player.pos,
+            PLAYER_CLEAR_RADIUS,
+        );
 
         let bullets = Vec::new();
 
@@ -69,6 +152,7 @@ impl State {
 }
 
 const PLAYER_SIZE: f32 = 10f32;
+const PLAYER_CLEAR_RADIUS: f32 = PLAYER_SIZE * 25f32;
 
 const MAX_SPEED: f32 = 1000.0f32;
 const ACCELERATION: f32 = 500f32;
@@ -231,19 +315,13 @@ async fn main() {
 
         if asteroids.is_empty() {
             let target = (*score as f32).log2() as u32 + ASTEROID_COUNT;
-            while asteroids.len() < target as usize {
-                let asteroid = Asteroid::new(screen_bounds);
-                if asteroid.pos.distance(player.pos) < asteroid.size + PLAYER_SIZE {
-                    continue;
-                }
-                for other in asteroids.iter() {
-                    if asteroid.pos.distance(other.pos) < asteroid.size + other.size {
-                        continue;
-                    }
-                }
-                // no collisions so we're good to go
-                asteroids.push(asteroid);
-            }
+            Asteroid::spawn_many(
+                asteroids,
+                target,
+                screen_bounds,
+                player.pos,
+                PLAYER_CLEAR_RADIUS,
+            );
         }
 
         clear_background(BLACK);
@@ -256,56 +334,7 @@ async fn main() {
             draw_circle_lines(asteroid.pos.x, asteroid.pos.y, asteroid.size, 1.0, WHITE);
         }
 
-        if draw_thrust {
-            draw_circle(
-                player.pos.x - player.angle.cos() * PLAYER_SIZE,
-                player.pos.y - player.angle.sin() * PLAYER_SIZE,
-                8f32,
-                YELLOW,
-            );
-        }
-
-        draw_triangle(
-            vec2(
-                player.pos.x + player.angle.cos() * PLAYER_SIZE,
-                player.pos.y + player.angle.sin() * PLAYER_SIZE,
-            ),
-            vec2(
-                player.pos.x
-                    + (player.angle + std::f32::consts::PI / 4.0 + std::f32::consts::PI).cos()
-                        * PLAYER_SIZE,
-                player.pos.y
-                    + (player.angle + std::f32::consts::PI / 4.0 + std::f32::consts::PI).sin()
-                        * PLAYER_SIZE,
-            ),
-            vec2(
-                player.pos.x
-                    + (player.angle - std::f32::consts::PI / 4.0 + std::f32::consts::PI).cos()
-                        * PLAYER_SIZE,
-                player.pos.y
-                    + (player.angle - std::f32::consts::PI / 4.0 + std::f32::consts::PI).sin()
-                        * PLAYER_SIZE,
-            ),
-            WHITE,
-        );
-
-        draw_line(
-            player.pos.x,
-            player.pos.y,
-            player.pos.x + player.velocity.x,
-            player.pos.y + player.velocity.y,
-            1.0,
-            BLUE,
-        );
-        draw_line(
-            player.pos.x,
-            player.pos.y,
-            player.pos.x + player.angle.cos() * 50f32,
-            player.pos.y + player.angle.sin() * 50f32,
-            1.0,
-            RED,
-        );
-        draw_circle(player.pos.x, player.pos.y, 2f32, RED);
+        player.draw(draw_thrust);
 
         draw_text(format!("Score: {score}").as_str(), 0.0, 32.0, 32.0, WHITE);
 
