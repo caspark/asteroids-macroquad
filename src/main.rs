@@ -1,5 +1,7 @@
 use macroquad::{prelude::*, rand::gen_range};
 
+const DEBUG_DRAW: bool = false;
+
 struct Player {
     pos: Vec2,
     angle: f32,
@@ -42,23 +44,16 @@ impl Player {
             WHITE,
         );
 
-        draw_line(
-            self.pos.x,
-            self.pos.y,
-            self.pos.x + self.velocity.x,
-            self.pos.y + self.velocity.y,
-            1.0,
-            BLUE,
-        );
-        draw_line(
-            self.pos.x,
-            self.pos.y,
-            self.pos.x + self.angle.cos() * 50f32,
-            self.pos.y + self.angle.sin() * 50f32,
-            1.0,
-            RED,
-        );
-        draw_circle(self.pos.x, self.pos.y, 2f32, RED);
+        if DEBUG_DRAW {
+            draw_line(
+                self.pos.x,
+                self.pos.y,
+                self.pos.x + self.velocity.x,
+                self.pos.y + self.velocity.y,
+                1.0,
+                BLUE,
+            );
+        }
     }
 }
 
@@ -164,7 +159,7 @@ const SHOT_COOLDOWN: f32 = 0.5f32;
 
 const BULLET_MAX_LIFE: f32 = 0.5f32;
 const BULLET_SPEED: f32 = 1000f32;
-const BULLET_RADIUS: f32 = 5f32;
+const BULLET_RADIUS: f32 = 2f32;
 
 const ASTEROID_MAX_SPEED: f32 = 100f32;
 const ASTEROID_STARTING_COUNT: u32 = 10;
@@ -347,7 +342,7 @@ async fn main() {
         clear_background(BLACK);
 
         for bullet in bullets.iter() {
-            draw_circle(bullet.pos.x, bullet.pos.y, BULLET_RADIUS, GREEN);
+            draw_circle(bullet.pos.x, bullet.pos.y, BULLET_RADIUS, WHITE);
         }
 
         for asteroid in asteroids.iter() {
