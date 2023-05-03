@@ -1,4 +1,4 @@
-use macroquad::prelude::*;
+use macroquad::{prelude::*, rand::gen_range};
 
 struct Player {
     pos: Vec2,
@@ -85,7 +85,7 @@ impl Asteroid {
                 rand::gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
                 rand::gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
             ),
-            size: rand::gen_range(10.0, 50.0),
+            size: ASTEROID_SIZES[rand::rand() as usize % ASTEROID_SIZES.len()],
         }
     }
 
@@ -134,7 +134,7 @@ impl State {
         let mut asteroids = Vec::new();
         Asteroid::spawn_many(
             &mut asteroids,
-            ASTEROID_COUNT,
+            ASTEROID_STARTING_COUNT,
             screen_bounds,
             player.pos,
             PLAYER_CLEAR_RADIUS,
@@ -167,7 +167,9 @@ const BULLET_SPEED: f32 = 1000f32;
 const BULLET_RADIUS: f32 = 5f32;
 
 const ASTEROID_MAX_SPEED: f32 = 100f32;
-const ASTEROID_COUNT: u32 = 10;
+const ASTEROID_STARTING_COUNT: u32 = 10;
+const ASTEROID_SIZES: [f32; 3] = [15.0, 30.0, 60.0];
+const ASTEROID_MIN_SIZE: f32 = ASTEROID_SIZES[0];
 
 #[macroquad::main("BasicShapes")]
 async fn main() {
@@ -296,12 +298,25 @@ async fn main() {
                 asteroid.pos.y = -asteroid.size;
             }
         }
+        let mut new_asteroids = Vec::new();
         asteroids.retain(|asteroid| {
-            let mut collision = false;
+            let mut asteroid_destroyed = false;
             bullets.retain(|bullet| {
                 if (bullet.pos - asteroid.pos).length() < asteroid.size + BULLET_RADIUS {
-                    collision = true;
-                    *score += 1;
+                    asteroid_destroyed = true;
+                    if asteroid.size > ASTEROID_MIN_SIZE {
+                        for _ in 0..2 {
+                            let mut new_asteroid = Asteroid { ..*asteroid };
+                            new_asteroid.size /= 2.0;
+                            new_asteroid.velocity = Vec2::new(
+                                gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
+                                gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
+                            );
+                            new_asteroids.push(new_asteroid);
+                        }
+                    } else {
+                        *score += 1;
+                    }
                     false
                 } else {
                     true
@@ -309,15 +324,16 @@ async fn main() {
             });
 
             if (player.pos - asteroid.pos).length() < asteroid.size + PLAYER_SIZE {
-                collision = true;
+                asteroid_destroyed = true;
                 *game_over = true;
             }
 
-            !collision
+            !asteroid_destroyed
         });
+        asteroids.extend(new_asteroids);
 
         if asteroids.is_empty() {
-            let target = (*score as f32).log2() as u32 + ASTEROID_COUNT;
+            let target = (*score as f32).log2() as u32 + ASTEROID_STARTING_COUNT;
             Asteroid::spawn_many(
                 asteroids,
                 target,
