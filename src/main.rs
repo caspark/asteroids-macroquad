@@ -19,6 +19,55 @@ struct Asteroid {
     size: f32,
 }
 
+impl Asteroid {
+    fn new(bounds: Vec2) -> Self {
+        Self {
+            pos: vec2(
+                rand::gen_range(0.0, bounds.x),
+                rand::gen_range(0.0, bounds.y),
+            ),
+            velocity: vec2(
+                rand::gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
+                rand::gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
+            ),
+            size: rand::gen_range(10.0, 50.0),
+        }
+    }
+}
+
+struct State {
+    player: Player,
+    bullets: Vec<Bullet>,
+    asteroids: Vec<Asteroid>,
+    score: u32,
+    game_over: bool,
+}
+
+impl State {
+    fn new(screen_bounds: Vec2) -> Self {
+        let player = Player {
+            pos: vec2(screen_bounds.x / 2.0, screen_bounds.y / 2.0),
+            angle: 0f32,
+            velocity: Vec2::ZERO,
+            shot_cooldown: 0.0,
+        };
+
+        let asteroids = (0..ASTEROID_COUNT)
+            .map(|_| Asteroid::new(screen_bounds))
+            .collect::<Vec<_>>();
+
+        let bullets = Vec::new();
+
+        Self {
+            player,
+            bullets,
+            asteroids,
+            score: 0,
+            game_over: false,
+        }
+    }
+}
+
 const PLAYER_SIZE: f32 = 10f32;
 
 const MAX_SPEED: f32 = 1000.0f32;
@@ -40,36 +89,27 @@ async fn main() {
 
     next_frame().await; // wait for screen resize
 
-    let screen = vec2(screen_width(), screen_height());
+    let screen_bounds = vec2(screen_width(), screen_height());
 
-    let mut player = Player {
-        pos: vec2(screen.x / 2.0, screen.y / 2.0),
-        angle: 0f32,
-        velocity: Vec2::ZERO,
-        shot_cooldown: 0.0,
-    };
-
-    let mut asteroids = (0..ASTEROID_COUNT)
-        .map(|_| Asteroid {
-            pos: vec2(
-                rand::gen_range(0.0, screen.x),
-                rand::gen_range(0.0, screen.y),
-            ),
-            velocity: vec2(
-                rand::gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
-                rand::gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
-            ),
-            size: rand::gen_range(10.0, 50.0),
-        })
-        .collect::<Vec<_>>();
-
-    let mut bullets = Vec::new();
+    let mut state = State::new(screen_bounds);
 
     loop {
         if is_key_pressed(KeyCode::Escape) {
             println!("Escape pressed, exiting...");
             break;
         }
+
+        if state.game_over {
+            state = State::new(screen_bounds);
+        }
+
+        let State {
+            ref mut player,
+            ref mut bullets,
+            ref mut asteroids,
+            ref mut score,
+            ref mut game_over,
+        } = state;
 
         let mut draw_thrust = false;
         let thrust = if is_key_down(KeyCode::W) {
@@ -113,15 +153,15 @@ async fn main() {
         player.pos += player.velocity * get_frame_time();
 
         // warping
-        if player.pos.x > screen.x {
+        if player.pos.x > screen_bounds.x {
             player.pos.x = 0.0;
         } else if player.pos.x < 0.0 {
-            player.pos.x = screen.x;
+            player.pos.x = screen_bounds.x;
         }
-        if player.pos.y > screen.y {
+        if player.pos.y > screen_bounds.y {
             player.pos.y = 0.0;
         } else if player.pos.y < 0.0 {
-            player.pos.y = screen.y;
+            player.pos.y = screen_bounds.y;
         }
 
         if shooting {
@@ -141,15 +181,15 @@ async fn main() {
             bullet.pos += bullet.velocity * get_frame_time();
 
             // warping
-            if bullet.pos.x > screen.x {
+            if bullet.pos.x > screen_bounds.x {
                 bullet.pos.x = 0.0;
             } else if bullet.pos.x < 0.0 {
-                bullet.pos.x = screen.x;
+                bullet.pos.x = screen_bounds.x;
             }
-            if bullet.pos.y > screen.y {
+            if bullet.pos.y > screen_bounds.y {
                 bullet.pos.y = 0.0;
             } else if bullet.pos.y < 0.0 {
-                bullet.pos.y = screen.y;
+                bullet.pos.y = screen_bounds.y;
             }
         }
         bullets.retain(|bullet| bullet.life > 0.0);
@@ -159,13 +199,13 @@ async fn main() {
 
             // warping
             if (asteroid.pos.x + asteroid.size) < 0.0 {
-                asteroid.pos.x = screen.x + asteroid.size;
-            } else if (asteroid.pos.x - asteroid.size) > screen.x {
+                asteroid.pos.x = screen_bounds.x + asteroid.size;
+            } else if (asteroid.pos.x - asteroid.size) > screen_bounds.x {
                 asteroid.pos.x = -asteroid.size;
             }
             if (asteroid.pos.y + asteroid.size) < 0.0 {
-                asteroid.pos.y = screen.y + asteroid.size;
-            } else if (asteroid.pos.y - asteroid.size) > screen.y {
+                asteroid.pos.y = screen_bounds.y + asteroid.size;
+            } else if (asteroid.pos.y - asteroid.size) > screen_bounds.y {
                 asteroid.pos.y = -asteroid.size;
             }
         }
@@ -174,6 +214,7 @@ async fn main() {
             bullets.retain(|bullet| {
                 if (bullet.pos - asteroid.pos).length() < asteroid.size + BULLET_RADIUS {
                     collision = true;
+                    *score += 1;
                     false
                 } else {
                     true
@@ -182,10 +223,28 @@ async fn main() {
 
             if (player.pos - asteroid.pos).length() < asteroid.size + PLAYER_SIZE {
                 collision = true;
+                *game_over = true;
             }
 
             !collision
         });
+
+        if asteroids.is_empty() {
+            let target = (*score as f32).log2() as u32 + ASTEROID_COUNT;
+            while asteroids.len() < target as usize {
+                let asteroid = Asteroid::new(screen_bounds);
+                if asteroid.pos.distance(player.pos) < asteroid.size + PLAYER_SIZE {
+                    continue;
+                }
+                for other in asteroids.iter() {
+                    if asteroid.pos.distance(other.pos) < asteroid.size + other.size {
+                        continue;
+                    }
+                }
+                // no collisions so we're good to go
+                asteroids.push(asteroid);
+            }
+        }
 
         clear_background(BLACK);
 
@@ -248,6 +307,8 @@ async fn main() {
         );
         draw_circle(player.pos.x, player.pos.y, 2f32, RED);
 
-        next_frame().await
+        draw_text(format!("Score: {score}").as_str(), 0.0, 32.0, 32.0, WHITE);
+
+        next_frame().await;
     }
 }
