@@ -27,3 +27,5 @@ basic-http-server dist/
 ```
 
 Once the changes are committed to master* and pushed, the changes will be live at https://caspark.github.io/asteroids-macroquad/ within a minute or two.
+
+(* yes storing junk on master isn't great and there are better ways to deal with this in Github pages. But it doesn't matter for this simple case.)
