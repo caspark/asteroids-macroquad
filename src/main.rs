@@ -1,4 +1,4 @@
-use macroquad::{prelude::*, rand::gen_range};
+use macroquad::prelude::*;
 
 const DEBUG_DRAW: bool = false;
 
@@ -63,28 +63,42 @@ struct Bullet {
     life: f32,
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+struct AsteroidPrototype {
+    size: f32,
+    speed: f32,
+    score: u32,
+}
+
 struct Asteroid {
     pos: Vec2,
     velocity: Vec2,
-    size: f32,
+    prototype_index: usize,
 }
 
 impl Asteroid {
-    fn new(bounds: Vec2) -> Self {
+    pub fn new(prototype_index: usize, pos: Vec2) -> Self {
+        assert!(prototype_index < ASTEROID_CONFIG.len());
+
+        let angle = rand::gen_range(0.0f32, ::std::f32::consts::PI * 2.0);
+        let velocity = vec2(angle.cos(), angle.sin()) * ASTEROID_CONFIG[prototype_index].speed;
+
         Self {
-            pos: vec2(
-                rand::gen_range(0.0, bounds.x),
-                rand::gen_range(0.0, bounds.y),
-            ),
-            velocity: vec2(
-                rand::gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
-                rand::gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
-            ),
-            size: ASTEROID_SIZES[rand::rand() as usize % ASTEROID_SIZES.len()],
+            pos,
+            velocity,
+            prototype_index,
         }
     }
 
-    fn spawn_many(
+    pub fn new_inside(prototype_index: usize, bounds: Vec2) -> Self {
+        let pos = vec2(
+            rand::gen_range(0.0, bounds.x),
+            rand::gen_range(0.0, bounds.y),
+        );
+        Self::new(prototype_index, pos)
+    }
+
+    pub fn spawn_many(
         v: &mut Vec<Asteroid>,
         count: u32,
         bounds: Vec2,
@@ -92,18 +106,43 @@ impl Asteroid {
         avoid_dist: f32,
     ) {
         while v.len() < count as usize {
-            let asteroid = Asteroid::new(bounds);
-            if asteroid.pos.distance(avoid_pos) < asteroid.size + avoid_dist {
+            let asteroid = Asteroid::new_inside(0, bounds);
+            if asteroid.pos.distance(avoid_pos) < asteroid.prototype().size + avoid_dist {
                 continue;
             }
             for other in v.iter() {
-                if asteroid.pos.distance(other.pos) < asteroid.size + other.size {
+                if asteroid.pos.distance(other.pos)
+                    < asteroid.prototype().size + other.prototype().size
+                {
                     continue;
                 }
             }
 
             // no collisions so we're good to go
             v.push(asteroid);
+        }
+    }
+
+    fn prototype(&self) -> &AsteroidPrototype {
+        &ASTEROID_CONFIG[self.prototype_index]
+    }
+
+    pub fn size(&self) -> f32 {
+        self.prototype().size
+    }
+
+    pub fn score(&self) -> u32 {
+        self.prototype().score
+    }
+
+    pub fn split(&self) -> Option<[Asteroid; 2]> {
+        if self.prototype_index == ASTEROID_CONFIG.len() - 1 {
+            None
+        } else {
+            Some([
+                Asteroid::new(self.prototype_index + 1, self.pos),
+                Asteroid::new(self.prototype_index + 1, self.pos),
+            ])
         }
     }
 }
@@ -161,10 +200,25 @@ const BULLET_MAX_LIFE: f32 = 0.5f32;
 const BULLET_SPEED: f32 = 1000f32;
 const BULLET_RADIUS: f32 = 2f32;
 
-const ASTEROID_MAX_SPEED: f32 = 100f32;
 const ASTEROID_STARTING_COUNT: u32 = 10;
-const ASTEROID_SIZES: [f32; 3] = [15.0, 30.0, 60.0];
-const ASTEROID_MIN_SIZE: f32 = ASTEROID_SIZES[0];
+
+const ASTEROID_CONFIG: [AsteroidPrototype; 3] = [
+    AsteroidPrototype {
+        size: 60.0,
+        speed: 20f32,
+        score: 1,
+    },
+    AsteroidPrototype {
+        size: 30.0,
+        speed: 50f32,
+        score: 2,
+    },
+    AsteroidPrototype {
+        size: 15.0,
+        speed: 100f32,
+        score: 3,
+    },
+];
 
 #[macroquad::main("Asteroids")]
 async fn main() {
@@ -282,43 +336,35 @@ async fn main() {
             asteroid.pos += asteroid.velocity * get_frame_time();
 
             // warping
-            if (asteroid.pos.x + asteroid.size) < 0.0 {
-                asteroid.pos.x = screen_bounds.x + asteroid.size;
-            } else if (asteroid.pos.x - asteroid.size) > screen_bounds.x {
-                asteroid.pos.x = -asteroid.size;
+            if (asteroid.pos.x + asteroid.size()) < 0.0 {
+                asteroid.pos.x = screen_bounds.x + asteroid.size();
+            } else if (asteroid.pos.x - asteroid.size()) > screen_bounds.x {
+                asteroid.pos.x = -asteroid.size();
             }
-            if (asteroid.pos.y + asteroid.size) < 0.0 {
-                asteroid.pos.y = screen_bounds.y + asteroid.size;
-            } else if (asteroid.pos.y - asteroid.size) > screen_bounds.y {
-                asteroid.pos.y = -asteroid.size;
+            if (asteroid.pos.y + asteroid.size()) < 0.0 {
+                asteroid.pos.y = screen_bounds.y + asteroid.size();
+            } else if (asteroid.pos.y - asteroid.size()) > screen_bounds.y {
+                asteroid.pos.y = -asteroid.size();
             }
         }
         let mut new_asteroids = Vec::new();
         asteroids.retain(|asteroid| {
             let mut asteroid_destroyed = false;
             bullets.retain(|bullet| {
-                if (bullet.pos - asteroid.pos).length() < asteroid.size + BULLET_RADIUS {
+                if (bullet.pos - asteroid.pos).length() < asteroid.size() + BULLET_RADIUS {
                     asteroid_destroyed = true;
-                    if asteroid.size > ASTEROID_MIN_SIZE {
-                        for _ in 0..2 {
-                            let mut new_asteroid = Asteroid { ..*asteroid };
-                            new_asteroid.size /= 2.0;
-                            new_asteroid.velocity = Vec2::new(
-                                gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
-                                gen_range(-ASTEROID_MAX_SPEED, ASTEROID_MAX_SPEED),
-                            );
-                            new_asteroids.push(new_asteroid);
-                        }
-                    } else {
-                        *score += 1;
+                    *score += asteroid.score();
+                    if let Some(asteroids) = asteroid.split() {
+                        new_asteroids.extend(asteroids);
                     }
+
                     false
                 } else {
                     true
                 }
             });
 
-            if (player.pos - asteroid.pos).length() < asteroid.size + PLAYER_SIZE {
+            if (player.pos - asteroid.pos).length() < asteroid.size() + PLAYER_SIZE {
                 asteroid_destroyed = true;
                 *game_over = true;
             }
@@ -346,7 +392,7 @@ async fn main() {
         }
 
         for asteroid in asteroids.iter() {
-            draw_circle_lines(asteroid.pos.x, asteroid.pos.y, asteroid.size, 1.0, WHITE);
+            draw_circle_lines(asteroid.pos.x, asteroid.pos.y, asteroid.size(), 1.0, WHITE);
         }
 
         player.draw(draw_thrust);
